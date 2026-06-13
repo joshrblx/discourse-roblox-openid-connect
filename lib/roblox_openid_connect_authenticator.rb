@@ -1,47 +1,15 @@
 # frozen_string_literal: true
 class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
-  # ============================================================
-  # CONFIGURATION — edit these
-  # ============================================================
-
-  GROUPS = [
-    {
-      roblox_group_id: 218181086,        # Your first Roblox group ID
-      rank_map: {
-        200 => { discourse_group: "developers", title: nil },
-        148 => { discourse_group: "horizon", title: nil },
-        149 => { discourse_group: "horizon", title: nil },
-        150 => { discourse_group: "horizon", title: nil },
-        5 => { discourse_group: "quality-assurance", title: "Quality Assurance" }
-      }
-    },
-    {
-      roblox_group_id: 860308753,        # Your second Roblox group ID
-      rank_map: {
-        106 => { discourse_group: nil, title: "Chief Executive Officer" },
-        105 => { discourse_group: nil, title: "Deputy Chief Executive" },
-      }
-    },
-    {
-      roblox_group_id: 879181875,
-      rank_map: {
-        54 => { discourse_group: nil, title: "Commissioner" },
-        53 => { discourse_group: nil, title: "Deputy Commissioner" },
-      }
-    },
-    {
-      roblox_group_id: 418300484,
-      rank_map: {
-        106 => { discourse_group: nil, title: "Brigadier" },
-        105 => { discourse_group: nil, title: "Colonel" },
-      }
-    }
-    # Add more groups here in the same format
-  ]
-  # ============================================================
 
   def name
     "rbxoidc"
+  end
+
+  def groups_config
+    JSON.parse(SiteSetting.openid_connect_rbx_group_config)
+  rescue JSON::ParserError => e
+    oidc_log("Invalid group config JSON: #{e.message}", error: true)
+    []
   end
 
   def can_revoke?
@@ -226,7 +194,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
   def sync_roblox_groups(user, roblox_uid)
     highest_title = nil
 
-    GROUPS.each do |group_config|
+    groups_config.each do |group_config|
       rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
       oidc_log("Roblox group #{group_config[:roblox_group_id]}: user #{roblox_uid} has rank #{rank}")
 
@@ -235,7 +203,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
 
       # Determine which groups the user qualifies for
       qualified = group_config[:rank_map]
-        .select { |min_rank, _| rank >= min_rank }
+        .select { |min_rank, _| rank >= min_rank.to_i }
         .values
 
       qualified_group_names = qualified.map { |v| v[:discourse_group] }

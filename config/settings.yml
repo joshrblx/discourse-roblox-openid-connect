@@ -46,3 +46,7 @@ plugins:
     secret: true
   openid_connect_rbx_force_userid_based_emails:
     default: true
+  openid_connect_rbx_group_config:
+    default: "[]"
+    type: string
+    textarea: true
