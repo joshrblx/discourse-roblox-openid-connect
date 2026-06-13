@@ -40,3 +40,6 @@ plugins:
     textarea: true
   openid_connect_rbx_match_by_email:
     default: false
+  openid_connect_rbx_roblox_api_key:
+    default: ""
+    secret: true

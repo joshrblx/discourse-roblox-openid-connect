@@ -1,7 +1,45 @@
 # frozen_string_literal: true
-# require_relative 'overrided_managed_auth'
-# class OpenIDConnectAuthenticator < CustomAuth::OverridedManagedAuthenticator
 class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
+  # ============================================================
+  # CONFIGURATION — edit these
+  # ============================================================
+
+  GROUPS = [
+    {
+      roblox_group_id: 218181086,        # Your first Roblox group ID
+      rank_map: {
+        200 => { discourse_group: "developers", title: nil },
+        148 => { discourse_group: "horizon", title: nil },
+        149 => { discourse_group: "horizon", title: nil },
+        150 => { discourse_group: "horizon", title: nil },
+        5 => { discourse_group: "quality-assurance", title: "Quality Assurance" }
+      }
+    },
+    {
+      roblox_group_id: 860308753,        # Your second Roblox group ID
+      rank_map: {
+        106 => { discourse_group: nil, title: "Chief Executive Officer" },
+        105 => { discourse_group: nil, title: "Deputy Chief Executive" },
+      }
+    },
+    {
+      roblox_group_id: 879181875,
+      rank_map: {
+        54 => { discourse_group: nil, title: "Commissioner" },
+        53 => { discourse_group: nil, title: "Deputy Commissioner" },
+      }
+    }.
+    {
+      roblox_group_id: 418300484
+      rank_map: {
+        106 => { discourse_group: nil, title: "Brigadier" },
+        105 => { discourse_group: nil, title: "Colonel" },
+      }
+    }
+    # Add more groups here in the same format
+  ]
+  # ============================================================
+
   def name
     "rbxoidc"
   end
@@ -20,11 +58,9 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
 
   def primary_email_verified?(auth)
     supplied_verified_boolean = auth["extra"]["raw_info"]["email_verified"]
-    # If the payload includes the email_verified boolean, use it. Otherwise assume true
     if supplied_verified_boolean.nil?
       true
     else
-      # Many providers violate the spec, and send this as a string rather than a boolean
       supplied_verified_boolean == true || supplied_verified_boolean == "true"
     end
   end
@@ -68,7 +104,6 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
 
     oidc_log("Discovery document loaded from cache") if from_cache
     oidc_log("Discovery document is\n\n#{result.to_yaml}")
-
     result
   end
 
@@ -98,9 +133,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
                           opts = env["omniauth.strategy"].options
 
                           token_params = {}
-                          token_params[
-                            :scope
-                          ] = SiteSetting.openid_connect_rbx_token_scope if SiteSetting.openid_connect_rbx_token_scope.present?
+                          token_params[:scope] = SiteSetting.openid_connect_rbx_token_scope if SiteSetting.openid_connect_rbx_token_scope.present?
 
                           opts.deep_merge!(
                             client_id: SiteSetting.openid_connect_rbx_client_id,
@@ -114,9 +147,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
                           )
 
                           opts[:client_options][:connection_opts] = {
-                            request: {
-                              timeout: request_timeout_seconds,
-                            },
+                            request: { timeout: request_timeout_seconds },
                           }
 
                           opts[:client_options][:connection_build] = lambda do |builder|
@@ -125,17 +156,14 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
                                                Rails.logger,
                                                { bodies: true, formatter: OIDCFaradayFormatter }
                             end
-
-                            builder.request :url_encoded # form-encode POST params
-                            builder.adapter FinalDestination::FaradayAdapter # make requests with FinalDestination::HTTP
+                            builder.request :url_encoded
+                            builder.adapter FinalDestination::FaradayAdapter
                           end
                         }
   end
 
   def retrieve_avatar(user, url)
     return unless user && url
-    # Check if the user has a custom avatar already AND the always_update_user_avatar? setting is false
-    
     return if user.user_avatar.try(:custom_upload_id).present? && !always_update_user_avatar?
     Jobs.enqueue(:download_avatar_from_url, url: url, user_id: user.id, override_gravatar: true)
   end
@@ -146,12 +174,83 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
 
   def after_authenticate(auth_token, existing_account: nil)
     result = super
+
+    # Auto-generate email if blank (SMTP disabled)
     if result.email.blank?
       uid = auth_token[:uid] || auth_token.dig(:extra, :raw_info, :sub)
       result.email = "roblox_#{uid}@#{Discourse.current_hostname}"
       result.email_valid = true
     end
+
+    # Sync Roblox group ranks to Discourse groups
+    if result.user
+      roblox_uid = auth_token[:uid] || auth_token.dig(:extra, :raw_info, :sub)
+      sync_roblox_groups(result.user, roblox_uid) if roblox_uid
+    end
+
     result
   end
 
+  private
+
+  def fetch_roblox_rank(roblox_group_id, roblox_uid)
+    url = "https://apis.roblox.com/cloud/v2/groups/#{roblox_group_id}/memberships?filter=user=='users/#{roblox_uid}'"
+    connection = Faraday.new do |c|
+      c.adapter FinalDestination::FaradayAdapter
+    end
+    response = connection.get(url) do |req|
+      req.headers["x-api-key"] = SiteSetting.openid_connect_rbx_roblox_api_key
+    end
+    return 0 unless response.status == 200
+    data = JSON.parse(response.body)
+    memberships = data["groupMemberships"] || []
+    return 0 if memberships.empty?
+    memberships.first.dig("role", "rank") || 0
+  rescue => e
+    oidc_log("Error fetching Roblox rank for group #{roblox_group_id}: #{e.message}", error: true)
+    0
+  end
+
+  def sync_roblox_groups(user, roblox_uid)
+    highest_title = nil
+
+    GROUPS.each do |group_config|
+      rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
+      oidc_log("Roblox group #{group_config[:roblox_group_id]}: user #{roblox_uid} has rank #{rank}")
+
+      # Collect all discourse group names for this Roblox group
+      all_discourse_groups = group_config[:rank_map].values.map { |v| v[:discourse_group] }.uniq
+
+      # Determine which groups the user qualifies for
+      qualified = group_config[:rank_map]
+        .select { |min_rank, _| rank >= min_rank }
+        .values
+
+      qualified_group_names = qualified.map { |v| v[:discourse_group] }
+
+      # Add/remove groups
+      all_discourse_groups.each do |group_name|
+        discourse_group = Group.find_by(name: group_name)
+        next unless discourse_group
+
+        if qualified_group_names.include?(group_name)
+          discourse_group.add(user) unless discourse_group.users.include?(user)
+          oidc_log("Added #{user.username} to group #{group_name}")
+        else
+          discourse_group.remove(user) if discourse_group.users.include?(user)
+          oidc_log("Removed #{user.username} from group #{group_name}")
+        end
+      end
+
+      # Track highest title from qualified ranks
+      qualified.each do |v|
+        highest_title ||= v[:title] if v[:title]
+      end
+    end
+
+    # Set title to highest earned title across all groups, or clear it
+    user.update(title: highest_title || "")
+  rescue => e
+    oidc_log("Error syncing groups for #{user.username}: #{e.message}", error: true)
+  end
 end
