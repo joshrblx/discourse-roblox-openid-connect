@@ -3,7 +3,7 @@
 # name: discourse-roblox-openid-connect
 # about: Add support for openid-connect as a login provider
 # version: 1.0
-# authors: David Taylor (Edited by Headless)
+# authors: David Taylor (Edited by Headless & j0shrbIx)
 # url: https://github.com/Djboy08/discourse-roblox-openid-connect
 # transpile_js: true
 
@@ -11,7 +11,7 @@ enabled_site_setting :openid_connect_rbx_enabled
 
 require_relative "lib/openid_connect_faraday_formatter"
 require_relative "lib/omniauth_open_id_connect"
-require_relative "lib/openid_connect_authenticator"
+require_relative "lib/roblox_openid_connect_authenticator"
 
 GlobalSetting.add_default :openid_connect_rbx_request_timeout_seconds, 10
 
@@ -20,7 +20,7 @@ GlobalSetting.add_default :openid_connect_rbx_request_timeout_seconds, 10
 on(:before_session_destroy) do |data|
   next if !SiteSetting.openid_connect_rbx_rp_initiated_logout
 
-  authenticator = OpenIDConnectAuthenticator.new
+  authenticator = RobloxOpenIDConnectAuthenticator.new
 
   oidc_record = data[:user]&.user_associated_accounts&.find_by(provider_name: "rbxoidc")
   if !oidc_record
@@ -61,4 +61,4 @@ on(:before_session_destroy) do |data|
   data[:redirect_url] = uri.to_s
 end
 
-auth_provider authenticator: OpenIDConnectAuthenticator.new
+auth_provider authenticator: RobloxOpenIDConnectAuthenticator.new

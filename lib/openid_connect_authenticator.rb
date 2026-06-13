@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 # require_relative 'overrided_managed_auth'
 # class OpenIDConnectAuthenticator < CustomAuth::OverridedManagedAuthenticator
-class OpenIDConnectAuthenticator < Auth::ManagedAuthenticator
+class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
   def name
     "rbxoidc"
   end

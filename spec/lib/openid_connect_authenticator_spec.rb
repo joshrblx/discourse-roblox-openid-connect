@@ -3,7 +3,7 @@
 require "rails_helper"
 require_relative "../../lib/omniauth_open_id_connect"
 
-describe OpenIDConnectAuthenticator do
+describe RobloxOpenIDConnectAuthenticator do
   let(:authenticator) { described_class.new }
   fab!(:user) { Fabricate(:user) }
   let(:hash) do
