@@ -205,7 +205,17 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
     data = JSON.parse(response.body)
     memberships = data["groupMemberships"] || []
     return 0 if memberships.empty?
-    memberships.first.dig("role", "rank") || 0
+
+    role_path = memberships.first["role"]  # e.g. "groups/218181086/roles/610608056"
+    return 0 unless role_path
+
+    # Fetch the role to get numeric rank
+    role_response = connection.get("https://apis.roblox.com/cloud/v2/#{role_path}") do |req|
+      req.headers["x-api-key"] = SiteSetting.openid_connect_rbx_roblox_api_key
+    end
+    return 0 unless role_response.status == 200
+    role_data = JSON.parse(role_response.body)
+    role_data["rank"] || 0
   rescue => e
     oidc_log("Error fetching Roblox rank for group #{roblox_group_id}: #{e.message}", error: true)
     0
