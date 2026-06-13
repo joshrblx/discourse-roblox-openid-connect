@@ -28,9 +28,9 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
         54 => { discourse_group: nil, title: "Commissioner" },
         53 => { discourse_group: nil, title: "Deputy Commissioner" },
       }
-    }.
+    },
     {
-      roblox_group_id: 418300484
+      roblox_group_id: 418300484,
       rank_map: {
         106 => { discourse_group: nil, title: "Brigadier" },
         105 => { discourse_group: nil, title: "Colonel" },
