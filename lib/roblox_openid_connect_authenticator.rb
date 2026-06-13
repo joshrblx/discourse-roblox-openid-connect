@@ -176,10 +176,12 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
     result = super
 
     # Auto-generate email if blank (SMTP disabled)
-    if result.email.blank?
-      uid = auth_token[:uid] || auth_token.dig(:extra, :raw_info, :sub)
-      result.email = "roblox_#{uid}@#{Discourse.current_hostname}"
-      result.email_valid = true
+    if SiteSetting.openid_connect_rbx_force_userid_based_emails
+      if result.email.blank?
+        uid = auth_token[:uid] || auth_token.dig(:extra, :raw_info, :sub)
+        result.email = "roblox_#{uid}@#{Discourse.current_hostname}"
+        result.email_valid = true
+      end
     end
 
     # Sync Roblox group ranks to Discourse groups

@@ -44,3 +44,5 @@ plugins:
   openid_connect_rbx_roblox_api_key:
     default: ""
     secret: true
+  openid_connect_rbx_force_userid_based_emails:
+    default: true
