@@ -143,4 +143,15 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
   def request_timeout_seconds
     GlobalSetting.openid_connect_rbx_request_timeout_seconds
   end
+
+  def after_authenticate(auth_token, existing_account: nil)
+    result = super
+    if result.email.blank?
+      uid = auth_token[:uid] || auth_token.dig(:extra, :raw_info, :sub)
+      result.email = "roblox_#{uid}@#{Discourse.current_hostname}"
+      result.email_valid = true
+    end
+    result
+  end
+
 end
