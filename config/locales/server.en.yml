@@ -18,6 +18,7 @@ en:
     openid_connect_rbx_overrides_avatar: "On every login, override the user's avatar using the openid-connect value. Works the same as the `auth_overrides_avatar` setting, but is specific to RBX OpenID Connect logins."
     openid_connect_rbx_claims: "Explicitly define the claims for use with providers that don't pass data back based on scopes. (JSON)"
     openid_connect_rbx_match_by_email: "Use email address to match OpenID Connect authentications to existing Discourse user accounts."
+    openid_connect_rbx_group_config: "Bind a Roblox rank(s) in (a) specific group(s) to a Discourse group and/or title. JSON format, example <a href='https://github.com/joshrblx/discourse-roblox-openid-connect/wiki/Creating-binds' target='_blank'>here</a>."
   login:
     omniauth_error:
       openid_connect_discovery_error: Unable to fetch configuration from identity provider. Please try again.
