@@ -192,65 +192,60 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
   end
 
   def sync_roblox_groups(user, roblox_uid)
-    highest_title = nil
-    should_be_mod = false
-    should_be_admin = false
+      highest_title = nil
+      should_be_mod = false
+      should_be_admin = false
 
-    groups_config.each do |group_config|
-      rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
-      oidc_log("Roblox group #{group_config[:roblox_group_id]}: user #{roblox_uid} has rank #{rank}")
+      groups_config.each do |group_config|
+        rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
+        oidc_log("Roblox group #{group_config[:roblox_group_id]}: user #{roblox_uid} has rank #{rank}")
 
-      all_discourse_groups = group_config[:rank_map].values.map { |v| v[:discourse_group] }.uniq
+        all_discourse_groups = group_config[:rank_map].values.map { |v| v[:discourse_group] }.uniq
 
-      qualified = group_config[:rank_map]
-        .select { |min_rank, _| rank >= min_rank.to_i }
-        .values
+        qualified = group_config[:rank_map]
+          .select { |min_rank, _| rank >= min_rank.to_i }
+          .values
 
-      qualified_group_names = qualified.map { |v| v[:discourse_group] }
+        qualified_group_names = qualified.map { |v| v[:discourse_group] }
 
-      all_discourse_groups.each do |group_name|
-        discourse_group = Group.find_by(name: group_name)
-        next unless discourse_group
+        all_discourse_groups.each do |group_name|
+          discourse_group = Group.find_by(name: group_name)
+          next unless discourse_group
 
-        if qualified_group_names.include?(group_name)
-          discourse_group.add(user) unless discourse_group.users.include?(user)
-          oidc_log("Added #{user.username} to group #{group_name}")
-        else
-          discourse_group.remove(user) if discourse_group.users.include?(user)
-          oidc_log("Removed #{user.username} from group #{group_name}")
+          if qualified_group_names.include?(group_name)
+            discourse_group.add(user) unless discourse_group.users.include?(user)
+            oidc_log("Added #{user.username} to group #{group_name}")
+          else
+            discourse_group.remove(user) if discourse_group.users.include?(user)
+            oidc_log("Removed #{user.username} from group #{group_name}")
+          end
+        end
+
+        qualified.each do |v|
+          highest_title ||= v[:title] if v[:title]
+          should_be_mod  = true if v[:add_mod]
+          should_be_admin = true if v[:add_dev]
         end
       end
 
-      qualified.each do |v|
-        highest_title ||= v[:title] if v[:title]
-        should_be_mod  = true if v[:add_mod]
-        should_be_admin = true if v[:add_dev]
+      if should_be_mod && !user.moderator
+        user.update!(moderator: true)
+        oidc_log("Granted moderator to #{user.username}")
+      elsif !should_be_mod && !should_be_admin && user.moderator
+        user.update!(moderator: false)
+        oidc_log("Revoked moderator from #{user.username}")
       end
-    end
 
-    if should_be_mod && !user.moderator
-      user.update!(moderator: true)
-      oidc_log("Granted moderator to #{user.username}")
-    elsif !should_be_mod && !should_be_admin && user.moderator
-      user.update!(moderator: false)
-      oidc_log("Revoked moderator from #{user.username}")
-    end
+      if should_be_admin && !user.admin
+        user.update!(admin: true)
+        oidc_log("Granted admin to #{user.username}")
+      elsif !should_be_admin && user.admin
+        user.update!(admin: false)
+        oidc_log("Revoked admin from #{user.username}")
+      end
 
-    if should_be_admin && !user.admin
-      user.update!(admin: true)
-      oidc_log("Granted admin to #{user.username}")
-    elsif !should_be_admin && user.admin
-      user.update!(admin: false)
-      oidc_log("Revoked admin from #{user.username}")
-    end
-
-    user.update(title: highest_title || "")
-  rescue => e
-    oidc_log("Error syncing groups for #{user.username}: #{e.message}", error: true)
-  end
-  
-    user.update(title: highest_title || "")
-  rescue => e
-    oidc_log("Error syncing groups for #{user.username}: #{e.message}", error: true)
+      user.update(title: highest_title || "")
+    rescue => e
+      oidc_log("Error syncing groups for #{user.username}: #{e.message}", error: true)
   end
 end
