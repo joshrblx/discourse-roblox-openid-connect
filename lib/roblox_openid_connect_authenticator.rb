@@ -198,7 +198,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
 
     groups_config.each do |group_config|
       group_config = group_config.transform_keys(&:to_sym) # normalize string → symbol keys
-      rank_map = (group_config[:rank_map] || {}).transform_keys(&:to_sym)
+      rank_map = (group_config[:rank_map] || {}).transform_values { |v| v.transform_keys(&:to_sym) }
       next if rank_map.empty?
 
       rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
