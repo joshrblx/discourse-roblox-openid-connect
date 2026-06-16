@@ -204,7 +204,7 @@ class RobloxOpenIDConnectAuthenticator < Auth::ManagedAuthenticator
       rank = fetch_roblox_rank(group_config[:roblox_group_id], roblox_uid)
       oidc_log("Roblox group #{group_config[:roblox_group_id]}: user #{roblox_uid} has rank #{rank}")
 
-      next if rank == 0 # not in this group, skip to next
+      next if rank <= 0 # not in this group, skip to next
 
       all_discourse_groups = rank_map.values.map { |v| v[:discourse_group] }.compact.uniq
 
